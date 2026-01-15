@@ -1,0 +1,20 @@
+# Evaluation configuration
+# All parameters are configured here, similar to train.yaml
+
+# Path to training output directory
+run_dir: outputs/2026-01-13/00-00-00
+
+# Checkpoint filename to load
+ckpt: best_model.pt
+
+# Number of evaluation episodes
+n_episodes: 50
+
+# Random seed (null = use seed from training config)
+seed: null
+
+# Device (auto, cuda, cpu)
+device: auto
+
+# Output path for results JSON (null = print to stdout)
+output: null

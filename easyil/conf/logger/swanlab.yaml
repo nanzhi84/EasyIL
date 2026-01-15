@@ -1,0 +1,11 @@
+enabled: true
+type: swanlab
+
+project: diffusion-bc
+experiment_name: null
+description: null
+group: null
+tags: []
+
+logdir: outputs/swanlab
+mode: local

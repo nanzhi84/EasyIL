@@ -1,0 +1,24 @@
+name: mlp_bc
+
+# Observation/action horizons
+obs_horizon: 1
+action_horizon: 1
+
+# Action chunking in evaluation:
+# - plan action_horizon, execute exec_horizon before replanning
+exec_horizon: 1
+
+# EMA (Exponential Moving Average) for stable evaluation
+ema_decay: 0.999
+
+# Observation noise for regularization during training
+obs_noise: 0.01
+
+model:
+  hidden: 512
+  depth: 4
+  dropout: 0.0
+
+policy:
+  action_clip: 1.0
+  use_amp: true

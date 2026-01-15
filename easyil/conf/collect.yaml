@@ -1,0 +1,28 @@
+defaults:
+  - env: halfcheetah
+  - _self_
+
+# Path to trained model (without .zip extension)
+model_path: ???
+
+# Number of episodes to collect
+n_episodes: 100
+
+# Output path for collected data
+output_path: data/${env.id}/expert_data/trajs.npz
+
+# Whether to use deterministic actions
+deterministic: true
+
+# Whether to load VecNormalize stats from model directory
+use_vecnormalize: true
+
+# Random seed
+seed: 42
+
+# Show progress bar
+show_progress: true
+
+hydra:
+  run:
+    dir: outputs/collect/${now:%Y-%m-%d}/${now:%H-%M-%S}

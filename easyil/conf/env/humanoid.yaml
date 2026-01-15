@@ -1,0 +1,47 @@
+id: Humanoid-v5
+
+# Parallel envs for online training
+num_envs: 64
+
+# Parallel envs for offline evaluation
+eval_num_envs: 64
+
+# Gymnasium env kwargs
+kwargs: {}
+
+# VecNormalize settings
+normalize:
+  enabled: false
+  norm_obs: true
+  norm_reward: false
+  clip_obs: 10.0
+  clip_reward: 10.0
+
+# Reward shaping / learned reward model
+# When enabled, replaces env reward with model output
+reward:
+  enabled: false
+  # Path to PyTorch reward model weights (.pth)
+  model_path: /home/ubuntu/liyichen/zl/diffusion_reward_test/runs/Humanoid-v5/reward/0/train/models/checkpoint_preference_epoch_300_step_42000/model.pth
+  # Network hidden dimension
+  hidden_dim: 256
+  # Reward scaling factor
+  scale: 1.0
+
+# Comparison reward for tracking (separate from training reward)
+# Use cases:
+#   - No tracking: compare_reward.enabled=false
+#   - Track groundtruth: compare_reward.enabled=true, model_path=null
+#   - Track custom reward: compare_reward.enabled=true, model_path=<path>
+compare_reward:
+  enabled: false
+  model_path: null
+  hidden_dim: 256
+  scale: 1.0
+
+# Plot labels for dual reward mode (semantic labels for curves)
+# When reward.enabled=true: train is RM, compare is groundtruth
+# When reward.enabled=false and compare_reward.enabled=true: train is groundtruth, compare is RM
+plot_labels:
+  train: null   # null = auto-detect based on reward.enabled
+  compare: null

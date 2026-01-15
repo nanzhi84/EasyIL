@@ -1,0 +1,28 @@
+# Total environment steps
+total_timesteps: 1000000
+
+# Logging frequency (in timesteps)
+log_freq: 10000
+
+# Evaluation frequency (in timesteps)
+eval_freq: 50000
+n_eval_episodes: 10
+deterministic_eval: true
+
+# Save best model
+save_best: true
+
+# Periodic checkpoints (in timesteps)
+checkpoint_freq: 250000
+
+# Progress bar in learn()
+progress_bar: true
+log_interval: 1000
+
+# Auto-plot eval curve
+plot_enabled: true
+plot_every_eval: true
+
+# Final evaluation at training end
+final_eval_episodes: 10
+final_deterministic_eval: true
