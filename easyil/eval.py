@@ -17,7 +17,7 @@ from easyil.envs import make_env
 from easyil.utils.cfg import pick_device
 
 if TYPE_CHECKING:
-    from easyil.core.base import BCModule
+    from easyil.algos import BCModule
 
 
 @dataclass

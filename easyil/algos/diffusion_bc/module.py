@@ -9,7 +9,7 @@ import torch
 from omegaconf import DictConfig
 from torch import nn
 
-from easyil.core.registry import register_algo
+from easyil.algos import register_algo
 from easyil.envs import infer_env_dims
 from easyil.algos.diffusion_bc.networks import build_noise_predictor
 from easyil.algos.diffusion_bc.policy import DiffusionPolicy, DiffusionPolicyConfig

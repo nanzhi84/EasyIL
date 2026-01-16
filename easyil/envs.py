@@ -1,5 +1,5 @@
 """
-Environment utilities for difftune.
+Environment utilities.
 
 Supports:
 - Vectorized environments (DummyVecEnv, SubprocVecEnv)
@@ -23,15 +23,20 @@ os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
 
 DEFAULT_ACTION_CLIP = 1.0
 
+# Sentinel value for using environment's original reward
+ENV_REWS = "env_rews"
+
+RewardFnType = Callable[[np.ndarray, np.ndarray], np.ndarray] | str
+
 
 class RewardWrapper(VecEnvWrapper):
     """
     VecEnv wrapper that supports custom reward functions for training and comparison.
 
-    Supports three modes:
-    1. Train with custom reward, compare with groundtruth
-    2. Train with groundtruth, compare with custom reward
-    3. Train with custom reward, compare with another custom reward
+    Args:
+        venv: The vectorized environment to wrap.
+        reward_fn: Training reward function or "env_rews" for environment reward. Required.
+        compare_reward_fn: Comparison reward function or "env_rews". Optional.
 
     The wrapper records compare_reward in info["compare_reward"] for tracking.
     """
@@ -39,14 +44,12 @@ class RewardWrapper(VecEnvWrapper):
     def __init__(
         self,
         venv: Any,
-        reward_fn: Callable[[np.ndarray, np.ndarray], np.ndarray] | None = None,
-        compare_reward_fn: Callable[[np.ndarray, np.ndarray], np.ndarray] | None = None,
-        compare_enabled: bool = False,
+        reward_fn: RewardFnType,
+        compare_reward_fn: RewardFnType | None = None,
     ):
         super().__init__(venv)
         self.reward_fn = reward_fn
         self.compare_reward_fn = compare_reward_fn
-        self.compare_enabled = compare_enabled
         self._last_obs: np.ndarray | None = None
         self._actions: np.ndarray | None = None
 
@@ -61,46 +64,42 @@ class RewardWrapper(VecEnvWrapper):
         self._actions = actions
         self.venv.step_async(actions)
 
+    def _compute_reward(self, reward_fn: RewardFnType, env_rews: np.ndarray) -> np.ndarray:
+        """Compute reward using reward_fn or return env_rews."""
+        return env_rews if reward_fn == ENV_REWS else reward_fn(self._last_obs, self._actions)
+
     def step_wait(self):
         obs, env_rews, dones, infos = self.venv.step_wait()
 
-        # Compute training reward
-        if self.reward_fn is not None and self._last_obs is not None:
-            train_rews = self.reward_fn(self._last_obs, self._actions)
-        else:
-            train_rews = env_rews
+        train_rews = self._compute_reward(self.reward_fn, env_rews)
 
-        # Compute comparison reward
-        if self.compare_reward_fn is not None and self._last_obs is not None:
-            compare_rews = self.compare_reward_fn(self._last_obs, self._actions)
-        else:
-            compare_rews = env_rews
-
-        for i, info in enumerate(infos):
-            info["compare_reward"] = compare_rews[i]
+        if self.compare_reward_fn is not None:
+            compare_rews = self._compute_reward(self.compare_reward_fn, env_rews)
+            for i, info in enumerate(infos):
+                info["compare_reward"] = compare_rews[i]
 
         self._last_obs = obs
         return obs, train_rews, dones, infos
 
 
 def _load_reward_fn(
-    reward_cfg: DictConfig | None,
+    reward_cfg: DictConfig,
     obs_dim: int,
     action_dim: int,
-) -> Callable[[np.ndarray, np.ndarray], np.ndarray] | None:
+) -> RewardFnType:
     """Load a reward function from config.
 
-    Returns None if:
-    - Config is missing or disabled
-    - model_path is None (use groundtruth instead)
-    """
-    if not reward_cfg or not reward_cfg.get("enabled"):
-        return None
+    Args:
+        reward_cfg: Reward configuration with model_path or "env_rews".
+        obs_dim: Observation dimension.
+        action_dim: Action dimension.
 
+    Returns:
+        Callable reward function or ENV_REWS sentinel.
+    """
     model_path = reward_cfg.get("model_path")
     if model_path is None:
-        # No model_path means use groundtruth (return None → env_rews)
-        return None
+        return ENV_REWS
 
     from easyil.reward import load_jax_reward_fn
 
@@ -114,15 +113,24 @@ def _load_reward_fn(
 
 
 def _wrap_reward(env: Any, env_cfg: DictConfig, env_id: str) -> Any:
-    """Wrap env with RewardWrapper if custom reward or compare_reward is enabled."""
+    """Wrap env with RewardWrapper.
+
+    Args:
+        env: The vectorized environment.
+        env_cfg: Environment configuration. Must contain "reward" config.
+        env_id: Environment ID string.
+
+    Returns:
+        Environment wrapped with RewardWrapper.
+
+    Raises:
+        KeyError: If reward config is missing.
+    """
     reward_cfg = env_cfg.get("reward")
+    if reward_cfg is None:
+        raise KeyError("Missing required config: env.reward")
+
     compare_cfg = env_cfg.get("compare_reward")
-
-    reward_enabled = reward_cfg and reward_cfg.get("enabled")
-    compare_enabled = compare_cfg and compare_cfg.get("enabled")
-
-    if not reward_enabled and not compare_enabled:
-        return env
 
     temp_env = gym.make(env_id)
     obs_dim = int(np.prod(temp_env.observation_space.shape))
@@ -130,13 +138,12 @@ def _wrap_reward(env: Any, env_cfg: DictConfig, env_id: str) -> Any:
     temp_env.close()
 
     reward_fn = _load_reward_fn(reward_cfg, obs_dim, action_dim)
-    compare_reward_fn = _load_reward_fn(compare_cfg, obs_dim, action_dim)
+    compare_reward_fn = _load_reward_fn(compare_cfg, obs_dim, action_dim) if compare_cfg else None
 
     return RewardWrapper(
         env,
         reward_fn=reward_fn,
         compare_reward_fn=compare_reward_fn,
-        compare_enabled=compare_enabled,
     )
 
 
@@ -230,7 +237,7 @@ def has_compare_reward(env: Any) -> bool:
     wrapper = get_reward_wrapper(env)
     if wrapper is None:
         return False
-    return wrapper.compare_enabled
+    return wrapper.compare_reward_fn is not None
 
 
 def save_vecnormalize(env: Any, path: Path) -> None:

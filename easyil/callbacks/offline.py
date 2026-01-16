@@ -14,7 +14,7 @@ from easyil.eval import EvalResult, run_eval
 from easyil.loggers import Logger
 
 if TYPE_CHECKING:
-    from easyil.core.base import BCModule
+    from easyil.algos import BCModule
 
 
 class OfflineTrainCallback:

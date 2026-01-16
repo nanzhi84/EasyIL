@@ -7,23 +7,21 @@ set -e
 #   2. Train with groundtruth, track custom reward
 #
 # Usage:
-#   ./train_dual.sh env=halfcheetah  # uses HalfCheetah reward model
-#   ./train_dual.sh env=humanoid     # uses Humanoid reward model
+#   ./train_dual.sh env.id=HalfCheetah-v5
+#   ./train_dual.sh env.id=Humanoid-v5
 
 echo "=== Experiment 1: Custom reward training + Groundtruth tracking ==="
-python -m easyil.train algo=sac \
-    env.reward.enabled=true \
-    env.compare_reward.enabled=true \
+python -m easyil.train --config-name=sac \
+    env.reward.model_path=/path/to/reward_model.pth \
     env.compare_reward.model_path=null \
     'hydra.run.dir=outputs/${env.id}/dual/${now:%Y-%m-%d_%H-%M-%S}_custom_train' \
     "$@"
 
 echo ""
 echo "=== Experiment 2: Groundtruth training + Custom reward tracking ==="
-python -m easyil.train algo=sac \
-    env.reward.enabled=false \
-    env.compare_reward.enabled=true \
-    'env.compare_reward.model_path=${env.reward.model_path}' \
+python -m easyil.train --config-name=sac \
+    env.reward.model_path=null \
+    env.compare_reward.model_path=/path/to/reward_model.pth \
     'hydra.run.dir=outputs/${env.id}/dual/${now:%Y-%m-%d_%H-%M-%S}_gt_train' \
     "$@"
 

@@ -1,5 +1,0 @@
-defaults:
-  - main
-  - override algo: sac
-  - override env: humanoid
-  - _self_

@@ -5,7 +5,7 @@ from typing import Any
 
 from omegaconf import DictConfig
 
-from easyil.core.registry import register_algo
+from easyil.algos import register_algo
 from easyil.utils.cfg import drop_none, to_plain_dict
 
 
