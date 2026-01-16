@@ -30,8 +30,7 @@ dev = [
 ]
 
 [project.scripts]
-easyil-online = "easyil.train_online:main"
-easyil-offline = "easyil.train_offline:main"
+easyil-train = "easyil.train:main"
 easyil-collect = "easyil.collect:main"
 easyil-eval = "easyil.eval:main"
 

@@ -1,3 +1,8 @@
+defaults:
+  - /train: bc
+  - /runner: offline
+  - _self_
+
 name: mlp_bc
 
 # Observation/action horizons

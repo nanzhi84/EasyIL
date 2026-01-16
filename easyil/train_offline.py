@@ -1,12 +1,10 @@
-"""Offline training entry point for behavior cloning algorithms."""
+"""Offline training runner for behavior cloning algorithms."""
 from __future__ import annotations
 
 from pathlib import Path
 
-import hydra
 import numpy as np
 import torch
-from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader
 
@@ -16,16 +14,12 @@ from easyil.datasets import ChunkedExpertDataset, load_expert_npz
 from easyil.envs import make_env, save_vecnormalize
 from easyil.loggers import build_logger
 from easyil.trainers import OfflineTrainer
-from easyil.utils.cfg import pick_device, save_resolved_config, seed_everything
+from easyil.utils.cfg import pick_device
 
 
-@hydra.main(config_path="conf", config_name="train_offline", version_base="1.3")
-def main(cfg: DictConfig) -> None:
-    output_dir = Path(HydraConfig.get().runtime.output_dir)
+def run(cfg: DictConfig, output_dir: Path) -> None:
+    output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-
-    save_resolved_config(cfg, output_dir)
-    seed_everything(cfg.seed)
 
     device = pick_device(str(cfg.train.get("device", "auto")))
     logger = build_logger(cfg.logger, output_dir, cfg)
@@ -34,14 +28,14 @@ def main(cfg: DictConfig) -> None:
     module = build_algo(cfg.algo, eval_env, str(output_dir))
     module.to(device)
 
-    # Compile networks for faster training (works for all BC algorithms)
-    use_compile = cfg.train.get("use_compile", True)
+    use_compile = cfg.train.get("use_compile")
+    if use_compile is None:
+        raise KeyError("Missing required config: train.use_compile")
     if use_compile and device.type == "cuda":
         module.net = torch.compile(module.net, mode="reduce-overhead")
         module.ema_net = torch.compile(module.ema_net, mode="reduce-overhead")
         module.policy.net = module.ema_net
 
-    # Dataset
     num_trajs = cfg.train.dataset.get("num_trajs", None)
     data = load_expert_npz(cfg.train.dataset.path, num_trajs=num_trajs)
     obs_normalize = cfg.train.dataset.get("obs_normalize", False)
@@ -102,7 +96,3 @@ def main(cfg: DictConfig) -> None:
 
     eval_env.close()
     logger.finish()
-
-
-if __name__ == "__main__":
-    main()

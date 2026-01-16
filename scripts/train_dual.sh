@@ -11,7 +11,7 @@ set -e
 #   ./train_dual.sh env=humanoid     # uses Humanoid reward model
 
 echo "=== Experiment 1: Custom reward training + Groundtruth tracking ==="
-python -m easyil.train_online \
+python -m easyil.train algo=sac \
     env.reward.enabled=true \
     env.compare_reward.enabled=true \
     env.compare_reward.model_path=null \
@@ -20,7 +20,7 @@ python -m easyil.train_online \
 
 echo ""
 echo "=== Experiment 2: Groundtruth training + Custom reward tracking ==="
-python -m easyil.train_online \
+python -m easyil.train algo=sac \
     env.reward.enabled=false \
     env.compare_reward.enabled=true \
     'env.compare_reward.model_path=${env.reward.model_path}' \

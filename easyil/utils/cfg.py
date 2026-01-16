@@ -40,7 +40,6 @@ def save_resolved_config(cfg: DictConfig, output_dir: Path) -> None:
         OmegaConf.to_yaml(cfg), encoding="utf-8"
     )
 
-
 def seed_everything(seed: int) -> None:
     """Set random seed for reproducibility across all libraries."""
     os.environ["PYTHONHASHSEED"] = str(seed)

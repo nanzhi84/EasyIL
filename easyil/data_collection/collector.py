@@ -38,7 +38,7 @@ class ExpertData:
 
         save_dict: Dict[str, np.ndarray] = {
             "obs": self.obs,
-            "action": self.actions,
+            "actions": self.actions,
             "done": self.dones,
         }
         if self.rewards is not None:

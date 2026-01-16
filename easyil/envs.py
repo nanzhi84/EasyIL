@@ -21,6 +21,8 @@ from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecEnvW
 
 os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
 
+DEFAULT_ACTION_CLIP = 1.0
+
 
 class RewardWrapper(VecEnvWrapper):
     """
@@ -190,6 +192,22 @@ def make_env(
     env = _wrap_reward(env, env_cfg, env_id)
     env = _wrap_normalize(env, env_cfg, training=training)
     return env
+
+
+def infer_env_dims(env: Any) -> Tuple[int, int, float]:
+    """Infer observation/action dimensions and action clip from env spaces."""
+    if not hasattr(env, "observation_space") or not hasattr(env, "action_space"):
+        raise TypeError("Expected env with observation_space and action_space")
+
+    obs_space = env.observation_space
+    act_space = env.action_space
+    if getattr(obs_space, "shape", None) is None or getattr(act_space, "shape", None) is None:
+        raise ValueError("Environment spaces must define shape")
+
+    obs_dim = int(obs_space.shape[0])
+    act_dim = int(act_space.shape[0])
+    act_clip = float(getattr(act_space, "high", [DEFAULT_ACTION_CLIP])[0])
+    return obs_dim, act_dim, act_clip
 
 
 def get_reward_wrapper(env: Any) -> RewardWrapper | None:

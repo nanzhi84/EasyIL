@@ -9,7 +9,7 @@ import numpy as np
 def load_expert_npz(path: str | Path, num_trajs: Optional[int] = None) -> Dict[str, np.ndarray]:
     """Load expert transitions from a .npz file.
 
-    Expected keys: obs, action, done
+    Expected keys: obs, actions, done
 
     Args:
         path: Path to the .npz file.
@@ -20,6 +20,12 @@ def load_expert_npz(path: str | Path, num_trajs: Optional[int] = None) -> Dict[s
     """
     data = np.load(Path(path), allow_pickle=True)
 
+    required_keys = ["obs", "actions", "done"]
+    missing_keys = [k for k in required_keys if k not in data]
+    if missing_keys:
+        missing = ", ".join(missing_keys)
+        raise KeyError(f"Missing required keys in expert dataset '{path}': {missing}")
+
     done = np.asarray(data["done"], dtype=bool)
     episode_starts = np.zeros(len(done), dtype=np.int64)
     episode_starts[0] = 1
@@ -29,7 +35,7 @@ def load_expert_npz(path: str | Path, num_trajs: Optional[int] = None) -> Dict[s
 
     result = {
         "obs": data["obs"],
-        "actions": data["action"],
+        "actions": data["actions"],
         "episode_starts": episode_starts,
     }
 

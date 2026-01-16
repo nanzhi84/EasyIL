@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from typing import Dict, Iterator, Optional
+from typing import Dict, Optional
 
 import numpy as np
 import torch
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import Dataset
 
 
 class ChunkedExpertDataset(Dataset):
@@ -58,8 +58,3 @@ class ChunkedExpertDataset(Dataset):
 
         return {"obs": torch.from_numpy(obs_hist), "actions": torch.from_numpy(act_chunk)}
 
-
-def infinite_dataloader(dl: DataLoader) -> Iterator[Dict[str, torch.Tensor]]:
-    """Turn a finite DataLoader into an infinite iterator."""
-    while True:
-        yield from dl

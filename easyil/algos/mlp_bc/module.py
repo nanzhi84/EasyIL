@@ -10,6 +10,7 @@ from omegaconf import DictConfig
 from torch import nn
 
 from easyil.core.registry import register_algo
+from easyil.envs import infer_env_dims
 from easyil.networks import MLPBackbone
 from easyil.algos.mlp_bc.policy import MLPPolicy, MLPPolicyConfig
 
@@ -105,18 +106,9 @@ class MLPBCModule:
         return loss
 
 
-def _infer_dims(eval_env: Any) -> tuple[int, int, float]:
-    obs_space = eval_env.observation_space
-    act_space = eval_env.action_space
-    obs_dim = int(obs_space.shape[0])
-    act_dim = int(act_space.shape[0])
-    clip = float(getattr(act_space, "high", [1.0])[0])
-    return obs_dim, act_dim, clip
-
-
 @register_algo("mlp_bc")
 def mlp_bc(cfg: DictConfig, eval_env: Any, output_dir: str) -> MLPBCModule:
-    obs_dim, act_dim, act_clip = _infer_dims(eval_env)
+    obs_dim, act_dim, act_clip = infer_env_dims(eval_env)
 
     obs_horizon = int(cfg.get("obs_horizon", 1))
     action_horizon = int(cfg.get("action_horizon", 1))

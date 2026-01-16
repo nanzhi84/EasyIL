@@ -1,15 +1,5 @@
 defaults:
-  - env: humanoid
-  - algo: sac
-  - train: rl
-  - logger: base
+  - main
+  - override algo: sac
+  - override env: humanoid
   - _self_
-
-seed: 42
-
-hydra:
-  run:
-    dir: outputs/${env.id}/${now:%Y-%m-%d}/${now:%H-%M-%S}_online
-  sweep:
-    dir: multirun/${env.id}/${now:%Y-%m-%d}/${now:%H-%M-%S}
-    subdir: ${hydra.job.num}

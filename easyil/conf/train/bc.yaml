@@ -12,6 +12,7 @@ num_workers: 16
 pin_memory: true
 
 use_amp: true
+use_compile: true
 grad_clip_norm: 1.0
 
 log_freq: 1000
