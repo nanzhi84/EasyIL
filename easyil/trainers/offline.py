@@ -15,7 +15,6 @@ from easyil.callbacks import OfflineTrainCallback
 from easyil.datasets import ChunkedExpertDataset, load_expert_npz
 from easyil.envs import make_env, save_vecnormalize
 from easyil.loggers import build_logger
-from easyil.utils.cfg import pick_device
 
 if TYPE_CHECKING:
     from easyil.algos import BCModule
@@ -29,7 +28,7 @@ class OfflineTrainer:
         self.output_dir = output_dir
         self.seed = cfg.seed
 
-        self.device = pick_device(str(cfg.train.get("device", "auto")))
+        self.device = torch.device("cuda")
         self.logger = build_logger(cfg.logger, output_dir, cfg)
         self.eval_env = make_env(cfg.env, output_dir, seed=cfg.seed + 1)
 

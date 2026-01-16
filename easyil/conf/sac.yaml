@@ -6,7 +6,7 @@ algo:
 
   kwargs:
     learning_rate: 3e-4
-    qf_learning_rate: null
+    qf_learning_rate: null  # Q-function learning rate, null = use learning_rate
     buffer_size: 1000000
     learning_starts: 10000
     batch_size: 1024
@@ -20,12 +20,11 @@ algo:
     ent_coef: auto
     target_entropy: auto
 
-    tensorboard_log: null
     verbose: 1
     seed: ${seed}
     device: auto
 
-    policy_kwargs: {}
+    policy_kwargs: null  # Extra policy network kwargs
 
 train:
   mode: online

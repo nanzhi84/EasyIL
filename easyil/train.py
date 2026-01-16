@@ -1,13 +1,26 @@
 from __future__ import annotations
 
+import os
+import random
 from pathlib import Path
 
 import hydra
+import numpy as np
+import torch
 from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig
 
 from easyil.trainers import build_trainer
-from easyil.utils.cfg import save_resolved_config, seed_everything
+from easyil.utils.cfg import save_resolved_config
+
+
+def _seed_everything(seed: int) -> None:
+    """Set random seed for reproducibility across all libraries."""
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
 
 
 @hydra.main(config_path="conf", config_name="diffusion_bc", version_base="1.3")
@@ -16,7 +29,7 @@ def main(cfg: DictConfig) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     save_resolved_config(cfg, output_dir)
-    seed_everything(cfg.seed)
+    _seed_everything(cfg.seed)
 
     trainer = build_trainer(cfg, output_dir)
     trainer.train()

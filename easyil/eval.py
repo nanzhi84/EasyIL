@@ -14,7 +14,6 @@ from omegaconf import DictConfig, OmegaConf
 
 from easyil.algos import build_algo
 from easyil.envs import make_env
-from easyil.utils.cfg import pick_device
 
 if TYPE_CHECKING:
     from easyil.algos import BCModule
@@ -193,7 +192,7 @@ def run_eval(
 @hydra.main(config_path="conf", config_name="eval", version_base="1.3")
 def main(cfg: DictConfig) -> None:
     run_dir = Path(cfg.run_dir)
-    device = pick_device(cfg.device)
+    device = torch.device("cuda")
 
     if cfg.seed is not None:
         seed = cfg.seed

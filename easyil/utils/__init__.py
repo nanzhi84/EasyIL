@@ -1,5 +1,5 @@
-"""Utilities for difftune."""
+"""Utilities for EasyIL."""
 
-from easyil.utils.cfg import drop_none, to_plain_dict
+from easyil.utils.cfg import save_resolved_config
 
-__all__ = ["drop_none", "to_plain_dict"]
+__all__ = ["save_resolved_config"]
