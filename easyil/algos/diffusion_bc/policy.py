@@ -130,6 +130,9 @@ class DiffusionPolicy(nn.Module):
 
                 x0_pred = self.scheduler.predict_x0_from_eps(xt, t_batch, eps)
 
+                if t_int == stop_step:
+                    break
+
                 t_prev = int(t_list[i + 1]) if i + 1 < len(t_list) else 0
                 xt = self.scheduler.step(xt, t_int, t_prev, eps)
 
