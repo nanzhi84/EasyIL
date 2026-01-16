@@ -8,10 +8,9 @@ import hydra
 import numpy as np
 import torch
 from hydra.core.hydra_config import HydraConfig
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 from easyil.trainers import build_trainer
-from easyil.utils.cfg import save_resolved_config
 
 
 def _seed_everything(seed: int) -> None:
@@ -28,7 +27,7 @@ def main(cfg: DictConfig) -> None:
     output_dir = Path(HydraConfig.get().runtime.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    save_resolved_config(cfg, output_dir)
+    (output_dir / "resolved_config.yaml").write_text(OmegaConf.to_yaml(cfg), encoding="utf-8")
     _seed_everything(cfg.seed)
 
     trainer = build_trainer(cfg, output_dir)
