@@ -7,7 +7,7 @@ import hydra
 from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig
 
-from easyil.data_collection.collector import ExpertCollector, load_model_for_collection
+from easyil.expert import ExpertCollector, load_model_for_collection
 from easyil.utils.cfg import save_resolved_config
 
 
