@@ -70,6 +70,41 @@ def update_ema(state: TrainState) -> TrainState:
     return state.replace(ema_params=new_ema)
 
 
+def _build_train_step(
+    apply_fn: Callable,
+    scheduler: BaseScheduler,
+    obs_noise: float,
+) -> Callable[[TrainState, Dict[str, jnp.ndarray], jnp.ndarray], Tuple[TrainState, float]]:
+    def train_step(
+        state: TrainState,
+        batch: Dict[str, jnp.ndarray],
+        rng_key: jnp.ndarray,
+    ) -> Tuple[TrainState, float]:
+        obs = batch["obs"]
+        x0 = batch["actions"]
+
+        batch_size = x0.shape[0]
+        rng_key, noise_key, t_key, obs_noise_key = jax.random.split(rng_key, 4)
+
+        if obs_noise > 0.0:
+            obs = obs + jax.random.normal(obs_noise_key, obs.shape) * obs_noise
+
+        t = jax.random.randint(t_key, (batch_size,), 0, int(scheduler.T))
+        noise = jax.random.normal(noise_key, x0.shape)
+        xt = scheduler.q_sample(x0, t, noise)
+
+        def loss_fn(params: Dict[str, Any]) -> jnp.ndarray:
+            pred = apply_fn(params, xt, t, obs)
+            return jnp.mean((pred - noise) ** 2)
+
+        loss, grads = jax.value_and_grad(loss_fn)(state.params)
+        state = state.apply_gradients(grads=grads)
+        state = update_ema(state)
+        return state, loss
+
+    return jax.jit(train_step)
+
+
 @dataclass
 class DiffusionBCModule:
     """Module for Diffusion-based Behavior Cloning (JAX)."""
@@ -85,6 +120,9 @@ class DiffusionBCModule:
 
     # Training state (set after initialization)
     state: Optional[TrainState] = field(default=None, repr=False)
+    _train_step_fn: Optional[
+        Callable[[TrainState, Dict[str, jnp.ndarray], jnp.ndarray], Tuple[TrainState, float]]
+    ] = field(default=None, init=False, repr=False)
 
     def init_state(
         self,
@@ -130,7 +168,6 @@ class DiffusionBCModule:
         loss = jnp.mean((pred - noise) ** 2)
         return loss
 
-    @jax.jit
     def train_step(
         self,
         state: TrainState,
@@ -138,14 +175,15 @@ class DiffusionBCModule:
         rng_key: jnp.ndarray,
     ) -> Tuple[TrainState, float]:
         """Single training step."""
-
-        def loss_fn(params):
-            return self.compute_loss(params, batch, rng_key)
-
-        loss, grads = jax.value_and_grad(loss_fn)(state.params)
-        state = state.apply_gradients(grads=grads)
-        state = update_ema(state)
-        return state, loss
+        if state is None:
+            raise ValueError("Train state must be initialized before calling train_step.")
+        if self._train_step_fn is None:
+            self._train_step_fn = _build_train_step(
+                apply_fn=state.apply_fn,
+                scheduler=self.scheduler,
+                obs_noise=self.obs_noise,
+            )
+        return self._train_step_fn(state, batch, rng_key)
 
     def sample_actions(
         self,

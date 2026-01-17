@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -99,6 +99,33 @@ def update_ema(state: TrainState) -> TrainState:
     return state.replace(ema_params=new_ema)
 
 
+def _build_train_step(
+    apply_fn: Callable,
+    obs_noise: float,
+) -> Callable[[TrainState, Dict[str, jnp.ndarray], jnp.ndarray], Tuple[TrainState, float]]:
+    def train_step(
+        state: TrainState,
+        batch: Dict[str, jnp.ndarray],
+        rng_key: jnp.ndarray,
+    ) -> Tuple[TrainState, float]:
+        obs = batch["obs"]
+        actions = batch["actions"]
+
+        if obs_noise > 0.0:
+            obs = obs + jax.random.normal(rng_key, obs.shape) * obs_noise
+
+        def loss_fn(params: Dict[str, Any]) -> jnp.ndarray:
+            pred = apply_fn(params, obs)
+            return jnp.mean((pred - actions) ** 2)
+
+        loss, grads = jax.value_and_grad(loss_fn)(state.params)
+        state = state.apply_gradients(grads=grads)
+        state = update_ema(state)
+        return state, loss
+
+    return jax.jit(train_step)
+
+
 @dataclass
 class MLPBCModule:
     """Module for MLP-based Behavior Cloning (JAX)."""
@@ -113,6 +140,9 @@ class MLPBCModule:
 
     # Training state (set after initialization)
     state: Optional[TrainState] = field(default=None, repr=False)
+    _train_step_fn: Optional[
+        Callable[[TrainState, Dict[str, jnp.ndarray], jnp.ndarray], Tuple[TrainState, float]]
+    ] = field(default=None, init=False, repr=False)
 
     def init_state(
         self,
@@ -149,7 +179,6 @@ class MLPBCModule:
         loss = jnp.mean((pred - actions) ** 2)
         return loss
 
-    @jax.jit
     def train_step(
         self,
         state: TrainState,
@@ -157,14 +186,14 @@ class MLPBCModule:
         rng_key: jnp.ndarray,
     ) -> Tuple[TrainState, float]:
         """Single training step."""
-
-        def loss_fn(params):
-            return self.compute_loss(params, batch, rng_key)
-
-        loss, grads = jax.value_and_grad(loss_fn)(state.params)
-        state = state.apply_gradients(grads=grads)
-        state = update_ema(state)
-        return state, loss
+        if state is None:
+            raise ValueError("Train state must be initialized before calling train_step.")
+        if self._train_step_fn is None:
+            self._train_step_fn = _build_train_step(
+                apply_fn=state.apply_fn,
+                obs_noise=self.obs_noise,
+            )
+        return self._train_step_fn(state, batch, rng_key)
 
     def sample_actions(
         self,

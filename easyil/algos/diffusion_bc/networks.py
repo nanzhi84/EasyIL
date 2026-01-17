@@ -11,6 +11,7 @@ from omegaconf import DictConfig
 from easyil.networks import ObsEncoder, TimestepEmbedding, UNet1DBackbone
 
 MODEL_REGISTRY: Dict[str, type] = {}
+_RESERVED_MODEL_KEYS = {"obs_dim", "act_dim", "obs_horizon", "action_horizon"}
 
 
 def register_model(name: str) -> Callable[[type], type]:
@@ -34,8 +35,24 @@ def build_noise_predictor(
         raise ValueError(f"Unknown model.type: {model_type} (expected: {list(MODEL_REGISTRY.keys())})")
     model_cls = MODEL_REGISTRY[model_type]
 
-    # Extract valid kwargs from config
-    model_kwargs = {k: v for k, v in dict(cfg).items() if k != "type"}
+    def get_model_fields(cls: type) -> List[str]:
+        if hasattr(cls, "__dataclass_fields__"):
+            return list(cls.__dataclass_fields__.keys())
+        sig = inspect.signature(cls)
+        return [name for name in sig.parameters if name != "self"]
+
+    cfg_dict = dict(cfg)
+    model_fields = set(get_model_fields(model_cls))
+    allowed_keys = model_fields - _RESERVED_MODEL_KEYS
+
+    unknown_keys = [k for k in cfg_dict.keys() if k != "type" and k not in allowed_keys]
+    if unknown_keys:
+        unknown_keys_sorted = sorted(unknown_keys)
+        raise ValueError(
+            f"Unknown model config keys for type '{model_type}': {unknown_keys_sorted}"
+        )
+
+    model_kwargs = {k: v for k, v in cfg_dict.items() if k in allowed_keys}
     return model_cls(
         obs_dim=obs_dim,
         act_dim=act_dim,

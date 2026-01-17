@@ -20,9 +20,6 @@ algo:
     type: unet  # mlp | unet
     time_emb_dim: 128
     emb_dim: 256
-    hidden: 512
-    depth: 4
-    dropout: 0.0
     base_channels: 128
     channel_mults: [1, 2]
     groups: 8
