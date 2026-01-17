@@ -17,6 +17,7 @@ from omegaconf import DictConfig
 from tqdm import tqdm
 
 from easyil.eval import load_eval_context
+from easyil.utils.cfg import pick_device
 
 if TYPE_CHECKING:
     from easyil.algos.diffusion_bc import DiffusionBCModule
@@ -319,7 +320,7 @@ def run_monotonicity_eval(
 def main(cfg: DictConfig) -> None:
     """Hydra entry point for monotonicity evaluation."""
     run_dir = Path(cfg.run_dir)
-    device = torch.device("cuda")
+    device = pick_device(cfg.device)
 
     # Parse use_k from config
     use_k = list(cfg.use_k) if cfg.use_k else list(range(cfg.max_k + 1))
