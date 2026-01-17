@@ -1,55 +1,37 @@
-"""MLP-based policy for direct action chunk prediction."""
+"""MLP-based policy for direct action chunk prediction (JAX)."""
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any, Callable, Dict
 
-import torch
-from torch import nn
+import jax.numpy as jnp
 
 
 @dataclass
 class MLPPolicyConfig:
     action_clip: float = 1.0
-    use_amp: bool = True
 
 
-class MLPPolicy(nn.Module):
-    """Policy that directly predicts action chunks via MLP forward pass."""
+def sample_action_chunk(
+    obs: jnp.ndarray,
+    net_apply: Callable,
+    params: Dict[str, Any],
+    action_clip: float,
+) -> jnp.ndarray:
+    """Predict an action chunk conditioned on obs history.
 
-    def __init__(self, net: nn.Module, cfg: MLPPolicyConfig) -> None:
-        super().__init__()
-        self.net = net
-        self.cfg = cfg
+    Args:
+        obs: Observation tensor of shape (B, obs_horizon, obs_dim).
+        net_apply: Network apply function.
+        params: Network parameters.
+        action_clip: Action clipping value.
 
-    @torch.no_grad()
-    def sample_action_chunk(
-        self,
-        obs: torch.Tensor,
-        act_dim: int,
-        action_horizon: int,
-    ) -> torch.Tensor:
-        """Predict an action chunk conditioned on obs history.
+    Returns:
+        Action chunk of shape (B, action_horizon, act_dim).
+    """
+    actions = net_apply(params, obs)
 
-        Args:
-            obs: Observation tensor of shape (B, obs_horizon, obs_dim).
-            act_dim: Action dimension (unused, for interface compatibility).
-            action_horizon: Number of actions to predict (unused, determined by net).
+    if action_clip is not None:
+        actions = jnp.clip(actions, -float(action_clip), float(action_clip))
 
-        Returns:
-            Action chunk of shape (B, action_horizon, act_dim).
-        """
-        device = obs.device
-        amp_ctx = torch.autocast(
-            device_type=str(device.type),
-            dtype=torch.float16,
-            enabled=bool(self.cfg.use_amp),
-        )
-
-        with amp_ctx:
-            actions = self.net(obs)
-
-        if self.cfg.action_clip is not None:
-            actions = torch.clamp(
-                actions, -float(self.cfg.action_clip), float(self.cfg.action_clip)
-            )
-        return actions
+    return actions

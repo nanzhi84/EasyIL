@@ -101,9 +101,9 @@ def _load_reward_fn(
     if model_path is None:
         return ENV_REWS
 
-    from easyil.reward import load_jax_reward_fn
+    from easyil.reward import load_reward_fn
 
-    return load_jax_reward_fn(
+    return load_reward_fn(
         str(model_path),
         obs_dim,
         action_dim,

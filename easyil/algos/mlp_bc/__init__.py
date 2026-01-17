@@ -1,11 +1,11 @@
-"""MLP-based Behavior Cloning algorithm."""
-
-from easyil.algos.mlp_bc.module import MLPBCModule, mlp_bc
-from easyil.algos.mlp_bc.policy import MLPPolicy, MLPPolicyConfig
+"""MLP BC algorithm (JAX)."""
+from easyil.algos.mlp_bc.module import MLPBCModule, MLPActionPredictor, mlp_bc
+from easyil.algos.mlp_bc.policy import MLPPolicyConfig, sample_action_chunk
 
 __all__ = [
     "MLPBCModule",
+    "MLPActionPredictor",
     "mlp_bc",
-    "MLPPolicy",
     "MLPPolicyConfig",
+    "sample_action_chunk",
 ]

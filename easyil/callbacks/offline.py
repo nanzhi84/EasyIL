@@ -1,13 +1,15 @@
-"""Callbacks for offline BC training."""
+"""Callbacks for offline BC training (JAX)."""
 from __future__ import annotations
 
 import csv
 import json
+import pickle
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
+import jax
+import jax.numpy as jnp
 import numpy as np
-import torch
 from omegaconf import DictConfig
 
 from easyil.eval import EvalResult, run_eval
@@ -18,7 +20,7 @@ if TYPE_CHECKING:
 
 
 class OfflineTrainCallback:
-    """Callback for offline training: logging, evaluation, checkpointing."""
+    """Callback for offline training: logging, evaluation, checkpointing (JAX)."""
 
     def __init__(
         self,
@@ -26,7 +28,6 @@ class OfflineTrainCallback:
         logger: Logger,
         output_dir: Path,
         eval_env: Any,
-        device: torch.device,
         train_cfg: DictConfig,
         algo_cfg: DictConfig,
         env_cfg: DictConfig,
@@ -35,7 +36,6 @@ class OfflineTrainCallback:
         self._logger = logger
         self.output_dir = Path(output_dir)
         self.eval_env = eval_env
-        self.device = device
         self.env_id = str(env_cfg.id)
         self.algo_name = str(algo_cfg.name)
         self.obs_norm_stats = obs_norm_stats
@@ -85,16 +85,10 @@ class OfflineTrainCallback:
             return
         self._log({"train/loss": loss, "train/lr": lr}, step=update)
 
-    def save_checkpoint(self, update: int, module: "BCModule", optimizer: torch.optim.Optimizer) -> None:
+    def save_checkpoint(self, update: int, module: "BCModule") -> None:
         if self.checkpoint_freq <= 0 or update % self.checkpoint_freq != 0:
             return
-        ckpt = {
-            "update": update,
-            "model": module.net.state_dict(),
-            "ema_model": module.ema_net.state_dict(),
-            "optimizer": optimizer.state_dict(),
-        }
-        torch.save(ckpt, self.output_dir / f"checkpoint_{update:08d}.pt")
+        module.save(str(self.output_dir / f"checkpoint_{update:08d}.pkl"))
 
     def _record_eval(self, update: int, result: EvalResult) -> None:
         row = {
@@ -144,7 +138,7 @@ class OfflineTrainCallback:
         fig.savefig(self.output_dir / "learning_curve.png", bbox_inches="tight")
         plt.close(fig)
 
-    def _run_eval(self, module: "BCModule", n_episodes: int, seed: int) -> EvalResult:
+    def _run_eval(self, module: "BCModule", n_episodes: int, seed: int, rng_key: jnp.ndarray) -> EvalResult:
         return run_eval(
             module=module,
             eval_env=self.eval_env,
@@ -152,31 +146,45 @@ class OfflineTrainCallback:
             obs_horizon=self.obs_horizon,
             action_horizon=self.action_horizon,
             exec_horizon=self.exec_horizon,
-            device=self.device,
+            rng_key=rng_key,
             seed=seed,
             obs_norm_stats=self.obs_norm_stats,
         )
 
-    def maybe_eval(self, update: int, module: "BCModule", seed: int) -> Optional[EvalResult]:
+    def maybe_eval(
+        self,
+        update: int,
+        module: "BCModule",
+        seed: int,
+        rng_key: jnp.ndarray,
+    ) -> Optional[EvalResult]:
         if self.eval_freq <= 0 or update % self.eval_freq != 0:
             return None
 
-        result = self._run_eval(module, self.n_eval_episodes, seed + 12345)
+        rng_key, eval_key = jax.random.split(rng_key)
+        result = self._run_eval(module, self.n_eval_episodes, seed + 12345, eval_key)
         self._record_eval(update, result)
         self._log({"eval/mean_return": result.mean_return, "eval/std_return": result.std_return}, step=update)
 
         if self.save_best and result.mean_return > self.best_mean_reward:
             self.best_mean_reward = result.mean_return
-            torch.save(module.ema_net.state_dict(), self.output_dir / "best_model.pt")
+            module.save(str(self.output_dir / "best_model.pkl"))
             self._log({"eval/best_mean_return": result.mean_return}, step=update)
 
         if self.plot_every_eval:
             self._plot()
         return result
 
-    def on_training_end(self, update: int, module: "BCModule", seed: int) -> None:
+    def on_training_end(
+        self,
+        update: int,
+        module: "BCModule",
+        seed: int,
+        rng_key: jnp.ndarray,
+    ) -> None:
         if self.final_eval_episodes > 0:
-            result = self._run_eval(module, self.final_eval_episodes, seed + 999)
+            rng_key, eval_key = jax.random.split(rng_key)
+            result = self._run_eval(module, self.final_eval_episodes, seed + 999, eval_key)
             last_update = self._eval_history[-1]["update"] if self._eval_history else -1
             if update != last_update:
                 self._record_eval(update, result)

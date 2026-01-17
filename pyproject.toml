@@ -4,13 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "easyil"
-version = "0.3.0"
-description = "EasyIL: A modular imitation learning framework for continuous control."
+version = "0.4.0"
+description = "EasyIL: A modular imitation learning framework for continuous control (JAX version)."
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
 dependencies = [
-  "torch>=2.3.0",
+  "jax[cuda12]>=0.4.20",
+  "flax>=0.8.0",
+  "optax>=0.1.7",
   "numpy>=1.26.0",
   "tqdm>=4.66.0",
   "hydra-core>=1.3.2",
@@ -18,7 +20,6 @@ dependencies = [
   "gymnasium[mujoco]>=0.29.0",
   "stable-baselines3>=2.3.0",
   "matplotlib>=3.8.0",
-  "jax[cuda12]",
   "sbx-rl>=0.25.0",
   "tensorboard>=2.20.0",
 ]

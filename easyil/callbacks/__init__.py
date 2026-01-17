@@ -1,6 +1,6 @@
-from __future__ import annotations
-
-from easyil.callbacks.online import OnlineTrainCallback
+"""Callback utilities (JAX)."""
 from easyil.callbacks.offline import OfflineTrainCallback
 
-__all__ = ["OnlineTrainCallback", "OfflineTrainCallback"]
+__all__ = [
+    "OfflineTrainCallback",
+]

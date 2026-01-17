@@ -1,56 +1,54 @@
-"""Offline trainer for behavior cloning algorithms."""
+"""Offline trainer for behavior cloning algorithms (JAX)."""
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict
+from typing import TYPE_CHECKING, Any, Dict, Iterator
 
+import jax
+import jax.numpy as jnp
 import numpy as np
-import torch
 from omegaconf import DictConfig
-from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from easyil.algos import build_algo
 from easyil.callbacks import OfflineTrainCallback
-from easyil.datasets import ChunkedExpertDataset, load_expert_npz
+from easyil.datasets import ChunkedExpertDataset, DataLoader, load_expert_npz
 from easyil.envs import make_env, save_vecnormalize
 from easyil.loggers import build_logger
-from easyil.utils.cfg import pick_device
 
 if TYPE_CHECKING:
     from easyil.algos import BCModule
 
 
 class OfflineTrainer:
-    """Trainer for offline learning algorithms (Diffusion BC, MLP BC, etc.)."""
+    """Trainer for offline learning algorithms (Diffusion BC, MLP BC, etc.) using JAX."""
 
     def __init__(self, cfg: DictConfig, output_dir: Path):
         self.cfg = cfg
         self.output_dir = output_dir
         self.seed = cfg.seed
 
-        self.device = pick_device(str(cfg.train.get("device", "auto")))
         self.logger = build_logger(cfg.logger, output_dir, cfg)
         self.eval_env = make_env(cfg.env, output_dir, seed=cfg.seed + 1)
 
         self.module = self._build_module()
         self.dataloader, self.obs_norm_stats = self._build_dataloader()
-        self.optimizer = self._build_optimizer()
         self.callback = self._build_callback()
 
-        self.use_amp = cfg.train.get("use_amp", True) and self.device.type == "cuda"
-        self.grad_clip = cfg.train.get("grad_clip_norm", 0.0)
         self.total_updates = int(cfg.train.total_updates)
+        self.rng_key = jax.random.PRNGKey(self.seed)
 
     def _build_module(self) -> "BCModule":
         module = build_algo(self.cfg.algo, self.eval_env, str(self.output_dir))
-        module.to(self.device)
 
-        use_compile = self.cfg.train.get("use_compile", True)
-        if use_compile and self.device.type == "cuda":
-            module.net = torch.compile(module.net, mode="reduce-overhead")
-            module.ema_net = torch.compile(module.ema_net, mode="reduce-overhead")
-            module.policy.net = module.ema_net
+        # Initialize training state
+        self.rng_key, init_key = jax.random.split(jax.random.PRNGKey(self.seed))
+        module.init_state(
+            rng_key=init_key,
+            learning_rate=self.cfg.train.learning_rate,
+            weight_decay=self.cfg.train.get("weight_decay", 0.0),
+            ema_decay=self.cfg.algo.get("ema_decay", 0.999),
+        )
 
         return module
 
@@ -72,44 +70,32 @@ class OfflineTrainer:
             obs_norm_stats = {"mean": ds.obs_mean, "std": ds.obs_std}
             np.savez(self.output_dir / "obs_norm_stats.npz", mean=ds.obs_mean, std=ds.obs_std)
 
-        num_workers = self.cfg.train.get("num_workers", 4)
         dl = DataLoader(
             ds,
             batch_size=self.cfg.train.batch_size,
             shuffle=True,
-            num_workers=num_workers,
-            pin_memory=self.cfg.train.get("pin_memory", True),
-            persistent_workers=num_workers > 0,
             drop_last=True,
+            seed=self.seed,
         )
 
         return dl, obs_norm_stats
-
-    def _build_optimizer(self) -> torch.optim.Optimizer:
-        return torch.optim.AdamW(
-            self.module.net.parameters(),
-            lr=self.cfg.train.learning_rate,
-            weight_decay=self.cfg.train.get("weight_decay", 0.0),
-        )
 
     def _build_callback(self) -> OfflineTrainCallback:
         return OfflineTrainCallback(
             logger=self.logger,
             output_dir=self.output_dir,
             eval_env=self.eval_env,
-            device=self.device,
             train_cfg=self.cfg.train,
             algo_cfg=self.cfg.algo,
             env_cfg=self.cfg.env,
             obs_norm_stats=self.obs_norm_stats,
         )
 
-    def _infinite_dataloader(self):
+    def _infinite_dataloader(self) -> Iterator[Dict[str, np.ndarray]]:
         while True:
             yield from self.dataloader
 
     def train(self) -> None:
-        scaler = torch.amp.GradScaler(self.device.type, enabled=self.use_amp)
         data_iter = self._infinite_dataloader()
         pbar = tqdm(
             range(1, self.total_updates + 1),
@@ -117,31 +103,30 @@ class OfflineTrainer:
             dynamic_ncols=True,
         )
 
+        state = self.module.state
+
         for update in pbar:
-            batch = {k: v.to(self.device, non_blocking=True) for k, v in next(data_iter).items()}
+            # Get batch and convert to JAX arrays
+            batch_np = next(data_iter)
+            batch = {k: jnp.array(v) for k, v in batch_np.items()}
 
-            self.optimizer.zero_grad(set_to_none=True)
-            with torch.autocast(device_type=self.device.type, dtype=torch.float16, enabled=self.use_amp):
-                loss = self.module.compute_loss(batch)
+            # Training step
+            self.rng_key, step_key = jax.random.split(self.rng_key)
+            state, loss = self.module.train_step(state, batch, step_key)
+            self.module.state = state
 
-            scaler.scale(loss).backward()
-            if self.grad_clip > 0:
-                scaler.unscale_(self.optimizer)
-                torch.nn.utils.clip_grad_norm_(self.module.net.parameters(), self.grad_clip)
-            scaler.step(self.optimizer)
-            scaler.update()
+            loss_val = float(loss)
+            lr = self.cfg.train.learning_rate
 
-            self.module.update_ema()
+            self.callback.log_train(update, loss_val, lr)
+            self.callback.save_checkpoint(update, self.module)
+            self.callback.maybe_eval(update, self.module, seed=self.seed, rng_key=self.rng_key)
+            pbar.set_postfix(loss=loss_val)
 
-            self.callback.log_train(update, loss.item(), self.optimizer.param_groups[0]["lr"])
-            self.callback.save_checkpoint(update, self.module, self.optimizer)
-            self.callback.maybe_eval(update, self.module, seed=self.seed)
-            pbar.set_postfix(loss=loss.item())
-
-        self.callback.on_training_end(self.total_updates, self.module, seed=self.seed)
+        self.callback.on_training_end(self.total_updates, self.module, seed=self.seed, rng_key=self.rng_key)
 
     def save(self) -> None:
-        torch.save(self.module.ema_net.state_dict(), self.output_dir / "final_model.pt")
+        self.module.save(str(self.output_dir / "final_model.pkl"))
         save_vecnormalize(self.eval_env, self.output_dir / "vecnormalize.pkl")
 
     def close(self) -> None:

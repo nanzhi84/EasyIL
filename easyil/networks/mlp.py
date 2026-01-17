@@ -1,47 +1,45 @@
-"""MLP backbone for neural networks."""
+"""MLP backbone for neural networks (JAX/Flax)."""
 from __future__ import annotations
 
-from typing import List
+from typing import Sequence
 
-import torch
-from torch import nn
+import jax.numpy as jnp
+import flax.linen as nn
 
 
 class MLPBackbone(nn.Module):
     """A simple MLP backbone with configurable depth and width."""
 
-    def __init__(
-        self,
-        in_dim: int,
-        out_dim: int,
-        hidden: int = 512,
-        depth: int = 4,
-        dropout: float = 0.0,
-        activation: str = "silu",
-    ) -> None:
-        super().__init__()
-        self.in_dim = int(in_dim)
-        self.out_dim = int(out_dim)
+    in_dim: int
+    out_dim: int
+    hidden: int = 512
+    depth: int = 4
+    dropout: float = 0.0
+    activation: str = "silu"
 
-        act_cls = {"silu": nn.SiLU, "relu": nn.ReLU, "gelu": nn.GELU}.get(activation.lower(), nn.SiLU)
+    def _get_activation(self):
+        act_map = {"silu": nn.silu, "relu": nn.relu, "gelu": nn.gelu}
+        return act_map.get(self.activation.lower(), nn.silu)
 
-        layers: List[nn.Module] = []
-        d = in_dim
-        for _ in range(depth - 1):
-            layers += [nn.Linear(d, hidden), act_cls()]
-            if dropout > 0:
-                layers.append(nn.Dropout(dropout))
-            d = hidden
-        layers.append(nn.Linear(d, out_dim))
-        self.net = nn.Sequential(*layers)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    @nn.compact
+    def __call__(self, x: jnp.ndarray, training: bool = False) -> jnp.ndarray:
         """Forward pass.
 
         Args:
             x: Input tensor of shape (B, in_dim).
+            training: Whether in training mode (for dropout).
 
         Returns:
             Output tensor of shape (B, out_dim).
         """
-        return self.net(x)
+        act_fn = self._get_activation()
+        d = self.in_dim
+
+        for i in range(self.depth - 1):
+            x = nn.Dense(features=self.hidden)(x)
+            x = act_fn(x)
+            if self.dropout > 0:
+                x = nn.Dropout(rate=self.dropout, deterministic=not training)(x)
+
+        x = nn.Dense(features=self.out_dim)(x)
+        return x

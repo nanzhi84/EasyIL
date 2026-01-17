@@ -1,30 +1,66 @@
-"""1D UNet backbone for sequence modeling."""
+"""1D UNet backbone for sequence modeling (JAX/Flax)."""
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List, Optional, Sequence, Tuple
 
-import torch
-from torch import nn
+import jax
+import jax.numpy as jnp
+import flax.linen as nn
 
 
 class ResBlock1D(nn.Module):
     """1D Residual block with embedding conditioning."""
 
-    def __init__(self, in_ch: int, out_ch: int, emb_dim: int, groups: int = 8) -> None:
-        super().__init__()
-        self.emb_proj = nn.Linear(emb_dim, out_ch)
-        self.norm1 = nn.GroupNorm(num_groups=min(groups, in_ch), num_channels=in_ch)
-        self.norm2 = nn.GroupNorm(num_groups=min(groups, out_ch), num_channels=out_ch)
-        self.conv1 = nn.Conv1d(in_ch, out_ch, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv1d(out_ch, out_ch, kernel_size=3, padding=1)
-        self.act = nn.SiLU()
-        self.skip = nn.Identity() if in_ch == out_ch else nn.Conv1d(in_ch, out_ch, kernel_size=1)
+    out_ch: int
+    emb_dim: int
+    groups: int = 8
 
-    def forward(self, x: torch.Tensor, emb: torch.Tensor) -> torch.Tensor:
-        h = self.conv1(self.act(self.norm1(x)))
-        h = h + self.emb_proj(emb).unsqueeze(-1)
-        h = self.conv2(self.act(self.norm2(h)))
-        return h + self.skip(x)
+    @nn.compact
+    def __call__(self, x: jnp.ndarray, emb: jnp.ndarray) -> jnp.ndarray:
+        in_ch = x.shape[-1]
+        out_ch = self.out_ch
+        groups = min(self.groups, in_ch)
+        out_groups = min(self.groups, out_ch)
+
+        # First conv
+        h = nn.GroupNorm(num_groups=groups)(x)
+        h = nn.silu(h)
+        h = nn.Conv(features=out_ch, kernel_size=(3,), padding="SAME")(h)
+
+        # Add embedding
+        emb_proj = nn.Dense(features=out_ch)(emb)
+        h = h + emb_proj[:, None, :]
+
+        # Second conv
+        h = nn.GroupNorm(num_groups=out_groups)(h)
+        h = nn.silu(h)
+        h = nn.Conv(features=out_ch, kernel_size=(3,), padding="SAME")(h)
+
+        # Skip connection
+        if in_ch != out_ch:
+            x = nn.Conv(features=out_ch, kernel_size=(1,))(x)
+
+        return h + x
+
+
+class Downsample1D(nn.Module):
+    """1D downsampling via strided convolution."""
+
+    out_ch: int
+
+    @nn.compact
+    def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
+        return nn.Conv(features=self.out_ch, kernel_size=(4,), strides=(2,), padding="SAME")(x)
+
+
+class Upsample1D(nn.Module):
+    """1D upsampling via transposed convolution."""
+
+    out_ch: int
+
+    @nn.compact
+    def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
+        return nn.ConvTranspose(features=self.out_ch, kernel_size=(4,), strides=(2,), padding="SAME")(x)
 
 
 class UNet1DBackbone(nn.Module):
@@ -34,88 +70,59 @@ class UNet1DBackbone(nn.Module):
     Designed to be used with conditioning embeddings (e.g., time + observation).
     """
 
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        emb_dim: int = 256,
-        base_channels: int = 128,
-        channel_mults: Optional[List[int]] = None,
-        groups: int = 8,
-    ) -> None:
-        super().__init__()
-        self.in_channels = int(in_channels)
-        self.out_channels = int(out_channels)
+    in_channels: int
+    out_channels: int
+    emb_dim: int = 256
+    base_channels: int = 128
+    channel_mults: Sequence[int] = (1, 2, 2)
+    groups: int = 8
 
-        if channel_mults is None:
-            channel_mults = [1, 2, 2]
-
-        self.in_conv = nn.Conv1d(in_channels, base_channels, kernel_size=3, padding=1)
-
-        # Down path
-        downs = []
-        cur = base_channels
-        self._skip_chs: List[int] = []
-        for mult in channel_mults:
-            out_ch = base_channels * int(mult)
-            downs.append(ResBlock1D(cur, out_ch, emb_dim, groups=groups))
-            downs.append(nn.Conv1d(out_ch, out_ch, kernel_size=4, stride=2, padding=1))
-            self._skip_chs.append(out_ch)
-            cur = out_ch
-        self.downs = nn.ModuleList(downs)
-
-        # Mid
-        self.mid1 = ResBlock1D(cur, cur, emb_dim, groups=groups)
-        self.mid2 = ResBlock1D(cur, cur, emb_dim, groups=groups)
-
-        # Up path
-        ups = []
-        for mult in reversed(channel_mults):
-            out_ch = base_channels * int(mult)
-            ups.append(nn.ConvTranspose1d(cur, out_ch, kernel_size=4, stride=2, padding=1))
-            ups.append(ResBlock1D(out_ch + out_ch, out_ch, emb_dim, groups=groups))
-            cur = out_ch
-        self.ups = nn.ModuleList(ups)
-
-        self.out_conv = nn.Sequential(
-            nn.GroupNorm(num_groups=min(groups, cur), num_channels=cur),
-            nn.SiLU(),
-            nn.Conv1d(cur, out_channels, kernel_size=3, padding=1),
-        )
-
-    def forward(self, x: torch.Tensor, emb: torch.Tensor) -> torch.Tensor:
+    @nn.compact
+    def __call__(self, x: jnp.ndarray, emb: jnp.ndarray) -> jnp.ndarray:
         """Forward pass.
 
         Args:
-            x: Input tensor of shape (B, in_channels, seq_len).
+            x: Input tensor of shape (B, seq_len, in_channels).
             emb: Conditioning embedding of shape (B, emb_dim).
 
         Returns:
-            Output tensor of shape (B, out_channels, seq_len).
+            Output tensor of shape (B, seq_len, out_channels).
         """
-        x = self.in_conv(x)
+        channel_mults = list(self.channel_mults)
 
+        # Initial projection
+        x = nn.Conv(features=self.base_channels, kernel_size=(3,), padding="SAME")(x)
+
+        # Down path
         skips = []
-        i = 0
-        while i < len(self.downs):
-            x = self.downs[i](x, emb)
+        cur_ch = self.base_channels
+        for i, mult in enumerate(channel_mults):
+            out_ch = self.base_channels * mult
+            x = ResBlock1D(out_ch=out_ch, emb_dim=self.emb_dim, groups=self.groups)(x, emb)
             skips.append(x)
-            x = self.downs[i + 1](x)
-            i += 2
+            x = Downsample1D(out_ch=out_ch)(x)
+            cur_ch = out_ch
 
-        x = self.mid1(x, emb)
-        x = self.mid2(x, emb)
+        # Mid
+        x = ResBlock1D(out_ch=cur_ch, emb_dim=self.emb_dim, groups=self.groups)(x, emb)
+        x = ResBlock1D(out_ch=cur_ch, emb_dim=self.emb_dim, groups=self.groups)(x, emb)
 
-        j = 0
-        while j < len(self.ups):
-            x = self.ups[j](x)  # upsample
+        # Up path
+        for i, mult in enumerate(reversed(channel_mults)):
+            out_ch = self.base_channels * mult
+            x = Upsample1D(out_ch=out_ch)(x)
             skip = skips.pop()
-            if x.shape[-1] != skip.shape[-1]:
-                min_len = min(x.shape[-1], skip.shape[-1])
-                x = x[..., :min_len]
-                skip = skip[..., :min_len]
-            x = torch.cat([x, skip], dim=1)
-            x = self.ups[j + 1](x, emb)
-            j += 2
+            # Handle size mismatch
+            min_len = min(x.shape[1], skip.shape[1])
+            x = x[:, :min_len, :]
+            skip = skip[:, :min_len, :]
+            x = jnp.concatenate([x, skip], axis=-1)
+            x = ResBlock1D(out_ch=out_ch, emb_dim=self.emb_dim, groups=self.groups)(x, emb)
+            cur_ch = out_ch
 
-        return self.out_conv(x)
+        # Output projection
+        x = nn.GroupNorm(num_groups=min(self.groups, cur_ch))(x)
+        x = nn.silu(x)
+        x = nn.Conv(features=self.out_channels, kernel_size=(3,), padding="SAME")(x)
+
+        return x

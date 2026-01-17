@@ -1,4 +1,4 @@
-"""Monotonicity evaluation for diffusion policy.
+"""Monotonicity evaluation for diffusion policy (JAX).
 
 Evaluates policy performance at different diffusion denoising steps to analyze
 the relationship between noise level and action quality.
@@ -11,16 +11,16 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 import hydra
+import jax
+import jax.numpy as jnp
 import numpy as np
-import torch
 from omegaconf import DictConfig
 from tqdm import tqdm
 
 from easyil.eval import load_eval_context
-from easyil.utils.cfg import pick_device
 
 if TYPE_CHECKING:
-    from easyil.algos.diffusion_bc import DiffusionBCModule
+    from easyil.algos.diffusion_bc.module import DiffusionBCModule
 
 
 @dataclass
@@ -48,7 +48,6 @@ class MonotonicityStats:
         }
 
 
-@torch.no_grad()
 def evaluate_monotonicity(
     module: "DiffusionBCModule",
     eval_env: Any,
@@ -59,7 +58,7 @@ def evaluate_monotonicity(
     obs_horizon: int,
     action_horizon: int,
     exec_horizon: int,
-    device: torch.device,
+    rng_key: jnp.ndarray,
     seed: int,
     return_x0: bool = False,
     obs_norm_stats: Optional[Dict[str, np.ndarray]] = None,
@@ -76,7 +75,7 @@ def evaluate_monotonicity(
         obs_horizon: Observation history length.
         action_horizon: Action chunk length.
         exec_horizon: Number of actions to execute before replanning.
-        device: Torch device for inference.
+        rng_key: JAX random key.
         seed: Random seed for reproducibility.
         return_x0: If True, use predicted x0 at each step; otherwise use noisy xt.
         obs_norm_stats: Optional dict with 'mean' and 'std' for observation normalization.
@@ -85,8 +84,6 @@ def evaluate_monotonicity(
     Returns:
         MonotonicityStats with evaluation results per diffusion step.
     """
-    module.policy.eval()
-
     obs_mean = obs_norm_stats["mean"] if obs_norm_stats else None
     obs_std = obs_norm_stats["std"] if obs_norm_stats else None
 
@@ -136,15 +133,16 @@ def evaluate_monotonicity(
 
             if need_plan:
                 # Batch inference for envs that need planning
-                obs_batch = torch.from_numpy(obs_hist[need_plan]).to(device=device)
-                chunks = module.policy.sample_action_chunk_at_step(
+                obs_batch = jnp.array(obs_hist[need_plan])
+                rng_key, sample_key = jax.random.split(rng_key)
+                chunks = module.sample_actions_at_step(
+                    rng_key=sample_key,
                     obs=obs_batch,
-                    act_dim=act_dim,
-                    action_horizon=action_horizon,
                     stop_step=k,
                     return_x0=return_x0,
+                    use_ema=True,
                 )
-                chunks_np = chunks.detach().cpu().numpy().astype(np.float32)
+                chunks_np = np.asarray(chunks, dtype=np.float32)
 
                 for idx, env_i in enumerate(need_plan):
                     action_queues[env_i] = chunks_np[idx]
@@ -251,7 +249,6 @@ def run_monotonicity_eval(
     n_episodes: int,
     max_episode_length: int,
     return_x0: bool,
-    device: torch.device,
     seed: int,
     output_subdir: str = "monotonicity",
 ) -> MonotonicityStats:
@@ -264,7 +261,6 @@ def run_monotonicity_eval(
         n_episodes: Number of episodes per step.
         max_episode_length: Maximum episode length.
         return_x0: Whether to use predicted x0 or noisy xt.
-        device: Torch device.
         seed: Random seed.
         output_subdir: Subdirectory name for outputs.
 
@@ -275,7 +271,6 @@ def run_monotonicity_eval(
     module, eval_env, train_cfg, obs_norm_stats = load_eval_context(
         run_dir=run_dir,
         ckpt=ckpt,
-        device=device,
         seed=seed,
     )
 
@@ -283,6 +278,8 @@ def run_monotonicity_eval(
     obs_horizon = train_cfg.algo.obs_horizon
     action_horizon = train_cfg.algo.action_horizon
     exec_horizon = train_cfg.algo.get("exec_horizon", action_horizon)
+
+    rng_key = jax.random.PRNGKey(seed)
 
     stats = evaluate_monotonicity(
         module=module,
@@ -293,7 +290,7 @@ def run_monotonicity_eval(
         obs_horizon=obs_horizon,
         action_horizon=action_horizon,
         exec_horizon=exec_horizon,
-        device=device,
+        rng_key=rng_key,
         seed=seed,
         return_x0=return_x0,
         obs_norm_stats=obs_norm_stats,
@@ -320,7 +317,6 @@ def run_monotonicity_eval(
 def main(cfg: DictConfig) -> None:
     """Hydra entry point for monotonicity evaluation."""
     run_dir = Path(cfg.run_dir)
-    device = pick_device(cfg.device)
 
     # Parse use_k from config
     use_k = list(cfg.use_k) if cfg.use_k else list(range(cfg.max_k + 1))
@@ -332,7 +328,6 @@ def main(cfg: DictConfig) -> None:
         n_episodes=cfg.n_episodes,
         max_episode_length=cfg.max_episode_length,
         return_x0=cfg.return_x0,
-        device=device,
         seed=cfg.seed,
         output_subdir=cfg.output_subdir,
     )

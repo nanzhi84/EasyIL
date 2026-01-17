@@ -1,57 +1,50 @@
-"""Common embedding layers for neural networks."""
+"""Common embedding layers for neural networks (JAX/Flax)."""
 from __future__ import annotations
 
 import math
+from typing import Callable
 
-import torch
-from torch import nn
+import jax
+import jax.numpy as jnp
+import flax.linen as nn
 
 
 class TimestepEmbedding(nn.Module):
     """Sinusoidal timestep embedding followed by MLP projection."""
 
-    def __init__(self, dim: int, hidden_dim: int) -> None:
-        super().__init__()
-        self.dim = int(dim)
-        self.net = nn.Sequential(
-            nn.Linear(dim, hidden_dim),
-            nn.SiLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-        )
+    dim: int
+    hidden_dim: int
 
     @staticmethod
-    def sinusoidal_embedding(timesteps: torch.Tensor, dim: int) -> torch.Tensor:
+    def sinusoidal_embedding(timesteps: jnp.ndarray, dim: int) -> jnp.ndarray:
         """Create sinusoidal timestep embeddings. (B,) -> (B, dim)"""
         half = dim // 2
-        freqs = torch.exp(
-            -math.log(10000) * torch.arange(0, half, dtype=torch.float32, device=timesteps.device) / half
-        )
-        args = timesteps.float().unsqueeze(1) * freqs.unsqueeze(0)
-        emb = torch.cat([torch.cos(args), torch.sin(args)], dim=1)
+        freqs = jnp.exp(-math.log(10000) * jnp.arange(0, half, dtype=jnp.float32) / half)
+        args = timesteps.astype(jnp.float32)[:, None] * freqs[None, :]
+        emb = jnp.concatenate([jnp.cos(args), jnp.sin(args)], axis=1)
         if dim % 2 == 1:
-            emb = torch.cat([emb, torch.zeros_like(emb[:, :1])], dim=1)
+            emb = jnp.concatenate([emb, jnp.zeros_like(emb[:, :1])], axis=1)
         return emb
 
-    def forward(self, t: torch.Tensor) -> torch.Tensor:
+    @nn.compact
+    def __call__(self, t: jnp.ndarray) -> jnp.ndarray:
         x = self.sinusoidal_embedding(t, self.dim)
-        return self.net(x)
+        x = nn.Dense(features=self.hidden_dim)(x)
+        x = nn.silu(x)
+        x = nn.Dense(features=self.hidden_dim)(x)
+        return x
 
 
 class ObsEncoder(nn.Module):
     """Observation encoder that flattens and projects observation history."""
 
-    def __init__(self, obs_dim: int, obs_horizon: int, emb_dim: int, hidden: int = 256) -> None:
-        super().__init__()
-        self.obs_dim = int(obs_dim)
-        self.obs_horizon = int(obs_horizon)
-        self.in_dim = self.obs_dim * self.obs_horizon
-        self.net = nn.Sequential(
-            nn.Linear(self.in_dim, hidden),
-            nn.SiLU(),
-            nn.Linear(hidden, emb_dim),
-        )
+    obs_dim: int
+    obs_horizon: int
+    emb_dim: int
+    hidden: int = 256
 
-    def forward(self, obs: torch.Tensor) -> torch.Tensor:
+    @nn.compact
+    def __call__(self, obs: jnp.ndarray) -> jnp.ndarray:
         """Encode observation history.
 
         Args:
@@ -62,4 +55,7 @@ class ObsEncoder(nn.Module):
         """
         b = obs.shape[0]
         x = obs.reshape(b, -1)
-        return self.net(x)
+        x = nn.Dense(features=self.hidden)(x)
+        x = nn.silu(x)
+        x = nn.Dense(features=self.emb_dim)(x)
+        return x

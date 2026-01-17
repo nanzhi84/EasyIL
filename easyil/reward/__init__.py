@@ -1,6 +1,8 @@
-from __future__ import annotations
+"""Reward network utilities (JAX)."""
+from easyil.reward.mlp import RewardNet, load_reward_fn, save_reward_params
 
-from easyil.reward.jax_net import JaxRewardNet, load_jax_reward_fn
-from easyil.reward.pytorch_net import RewardNet
-
-__all__ = ["JaxRewardNet", "RewardNet", "load_jax_reward_fn"]
+__all__ = [
+    "RewardNet",
+    "load_reward_fn",
+    "save_reward_params",
+]
