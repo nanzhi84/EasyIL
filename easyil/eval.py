@@ -15,7 +15,7 @@ import numpy as np
 from omegaconf import DictConfig, OmegaConf
 
 from easyil.algos import build_algo
-from easyil.envs import make_env
+from easyil.envs import VecEnvProtocol, make_env
 
 if TYPE_CHECKING:
     from easyil.algos import BCModule
@@ -36,7 +36,7 @@ def load_eval_context(
     run_dir: Path,
     ckpt: str,
     seed: int,
-) -> Tuple["BCModule", Any, DictConfig, Optional[Dict[str, np.ndarray]]]:
+) -> Tuple["BCModule", VecEnvProtocol, DictConfig, Optional[Dict[str, np.ndarray]]]:
     """Load model, environment, config, and normalization stats for evaluation.
 
     Args:
@@ -87,7 +87,7 @@ def load_eval_context(
 
 def run_eval(
     module: "BCModule",
-    eval_env: Any,
+    eval_env: VecEnvProtocol,
     n_episodes: int,
     *,
     obs_horizon: int,

@@ -3,15 +3,15 @@ from __future__ import annotations
 
 import csv
 import json
-import pickle
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 from omegaconf import DictConfig
 
+from easyil.envs import VecEnvProtocol
 from easyil.eval import EvalResult, run_eval
 from easyil.loggers import Logger
 
@@ -27,7 +27,7 @@ class OfflineTrainCallback:
         *,
         logger: Logger,
         output_dir: Path,
-        eval_env: Any,
+        eval_env: VecEnvProtocol,
         train_cfg: DictConfig,
         algo_cfg: DictConfig,
         env_cfg: DictConfig,

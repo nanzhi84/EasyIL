@@ -11,10 +11,11 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any, Callable, Tuple
+from typing import Any, Callable, Protocol, Tuple, runtime_checkable
 
 import gymnasium as gym
 import numpy as np
+from gymnasium import spaces
 from omegaconf import DictConfig
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecEnvWrapper, VecNormalize
@@ -27,6 +28,23 @@ DEFAULT_ACTION_CLIP = 1.0
 ENV_REWS = "env_rews"
 
 RewardFnType = Callable[[np.ndarray, np.ndarray], np.ndarray] | str
+
+
+@runtime_checkable
+class VecEnvProtocol(Protocol):
+    """Protocol for vectorized environments.
+
+    Defines the minimal interface required by EasyIL trainers and evaluators.
+    Compatible with SB3 VecEnv and similar implementations.
+    """
+
+    num_envs: int
+    observation_space: spaces.Space
+    action_space: spaces.Space
+
+    def reset(self) -> np.ndarray: ...
+    def step(self, actions: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray, list]: ...
+    def close(self) -> None: ...
 
 
 class RewardWrapper(VecEnvWrapper):
@@ -170,7 +188,7 @@ def make_env(
     n_envs: int = 1,
     training: bool = False,
     monitor_subdir: str = "eval",
-) -> Any:
+) -> VecEnvProtocol:
     """
     Create a vectorized environment with optional wrappers.
 

@@ -8,12 +8,12 @@ from omegaconf import DictConfig
 
 from easyil.algos import ALGO_REGISTRY, build_algo
 from easyil.callbacks import OnlineTrainCallback
-from easyil.envs import make_env, save_vecnormalize
+from easyil.envs import VecEnvProtocol, make_env, save_vecnormalize
 from easyil.expert.rl import EXPERT_RL_REGISTRY, build_expert_algo
 from easyil.loggers import build_logger
 
 
-def _build_online_algo(cfg: DictConfig, env: Any, output_dir: str) -> Any:
+def _build_online_algo(cfg: DictConfig, env: VecEnvProtocol, output_dir: str) -> Any:
     """Build algorithm for online training.
 
     Checks IL algorithms first, then falls back to expert RL algorithms.
@@ -31,6 +31,9 @@ def _build_online_algo(cfg: DictConfig, env: Any, output_dir: str) -> Any:
 
 class OnlineTrainer:
     """Trainer for online algorithms (expert RL training, online IL, etc.)."""
+
+    train_env: VecEnvProtocol
+    eval_env: VecEnvProtocol
 
     def __init__(self, cfg: DictConfig, output_dir: Path):
         self.cfg = cfg

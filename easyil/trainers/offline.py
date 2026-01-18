@@ -12,8 +12,8 @@ from tqdm import tqdm
 
 from easyil.algos import build_algo
 from easyil.callbacks import OfflineTrainCallback
-from easyil.datasets import ChunkedExpertDataset, DataLoader, load_expert_npz
-from easyil.envs import make_env, save_vecnormalize
+from easyil.datasets import ILDataset, TrajectoryDataLoader, build_dataset
+from easyil.envs import VecEnvProtocol, make_env, save_vecnormalize
 from easyil.loggers import build_logger
 
 if TYPE_CHECKING:
@@ -22,6 +22,8 @@ if TYPE_CHECKING:
 
 class OfflineTrainer:
     """Trainer for offline learning algorithms (Diffusion BC, MLP BC, etc.) using JAX."""
+
+    eval_env: VecEnvProtocol
 
     def __init__(self, cfg: DictConfig, output_dir: Path):
         self.cfg = cfg
@@ -52,25 +54,17 @@ class OfflineTrainer:
 
         return module
 
-    def _build_dataloader(self) -> tuple[DataLoader, Dict[str, np.ndarray] | None]:
+    def _build_dataloader(self) -> tuple[TrajectoryDataLoader, Dict[str, np.ndarray] | None]:
         dataset_cfg = self.cfg.train.dataset
-        num_trajs = dataset_cfg.get("num_trajs", None)
-        data = load_expert_npz(dataset_cfg.path, num_trajs=num_trajs)
-
-        obs_normalize = dataset_cfg.get("obs_normalize", False)
-        ds = ChunkedExpertDataset(
-            data=data,
+        ds = build_dataset(
+            dataset_cfg,
             obs_horizon=self.cfg.algo.obs_horizon,
             action_horizon=self.cfg.algo.action_horizon,
-            obs_normalize=obs_normalize,
         )
 
-        obs_norm_stats = None
-        if obs_normalize and ds.obs_mean is not None:
-            obs_norm_stats = {"mean": ds.obs_mean, "std": ds.obs_std}
-            np.savez(self.output_dir / "obs_norm_stats.npz", mean=ds.obs_mean, std=ds.obs_std)
+        obs_norm_stats = self._extract_obs_norm_stats(ds)
 
-        dl = DataLoader(
+        dl = TrajectoryDataLoader(
             ds,
             batch_size=self.cfg.train.batch_size,
             shuffle=True,
@@ -79,6 +73,15 @@ class OfflineTrainer:
         )
 
         return dl, obs_norm_stats
+
+    def _extract_obs_norm_stats(self, ds: ILDataset) -> Dict[str, np.ndarray] | None:
+        """Extract and save observation normalization stats from dataset."""
+        if ds.obs_mean is None:
+            return None
+
+        obs_norm_stats = {"mean": ds.obs_mean, "std": ds.obs_std}
+        np.savez(self.output_dir / "obs_norm_stats.npz", mean=ds.obs_mean, std=ds.obs_std)
+        return obs_norm_stats
 
     def _build_callback(self) -> OfflineTrainCallback:
         return OfflineTrainCallback(

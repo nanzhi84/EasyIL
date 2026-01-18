@@ -1,13 +1,17 @@
-"""Chunked dataset for behavior cloning (pure NumPy)."""
+"""Trajectory dataset for behavior cloning (pure NumPy)."""
 from __future__ import annotations
 
-from typing import Dict, Iterator, Optional, Tuple
+from typing import Dict, Iterator, Optional
 
 import numpy as np
 
 
-class ChunkedExpertDataset:
-    """Samples (obs_history, action_chunk) pairs without crossing episodes."""
+class TrajectoryDataset:
+    """Dataset that samples (obs_history, action_chunk) pairs from trajectories.
+
+    Used by BC algorithms (Diffusion BC, MLP BC).
+    Ensures samples do not cross episode boundaries.
+    """
 
     def __init__(
         self,
@@ -24,7 +28,9 @@ class ChunkedExpertDataset:
         episode_starts = np.asarray(data["episode_starts"], dtype=np.int64)
 
         self.ep_ids = np.cumsum(episode_starts) - 1
-        self.ep_start_idx = np.maximum.accumulate(np.where(episode_starts, np.arange(len(episode_starts)), 0))
+        self.ep_start_idx = np.maximum.accumulate(
+            np.where(episode_starts, np.arange(len(episode_starts)), 0)
+        )
 
         self.valid_starts = self._build_valid_starts()
 
@@ -58,12 +64,12 @@ class ChunkedExpertDataset:
         return {"obs": obs_hist, "actions": act_chunk}
 
 
-class DataLoader:
-    """Simple data loader for JAX training (pure NumPy)."""
+class TrajectoryDataLoader:
+    """Data loader for trajectory datasets (pure NumPy)."""
 
     def __init__(
         self,
-        dataset: ChunkedExpertDataset,
+        dataset: TrajectoryDataset,
         batch_size: int,
         shuffle: bool = True,
         drop_last: bool = True,

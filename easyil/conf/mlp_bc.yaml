@@ -21,6 +21,7 @@ train:
   mode: offline
 
   dataset:
+    type: trajectory
     path: data/HalfCheetah-v5/expert_data/trajs.npz
     obs_normalize: true
     num_trajs: 1
