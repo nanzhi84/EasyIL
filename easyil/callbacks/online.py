@@ -1,5 +1,5 @@
 """
-Callback for online RL training with support for:
+Callback for online IL training with support for:
 - Standard training metrics logging
 - Evaluation and checkpointing
 - Dual reward tracking (when using learned reward models)
@@ -25,7 +25,7 @@ from easyil.loggers import Logger
 
 class OnlineTrainCallback(BaseCallback):
     """
-    Callback for online RL training: logging, evaluation, checkpointing.
+    Callback for online IL training: logging, evaluation, checkpointing.
 
     When the environment has a RewardWrapper (reward shaping enabled),
     automatically tracks both shaped and true rewards for comparison.
@@ -279,7 +279,7 @@ class OnlineTrainCallback(BaseCallback):
         fig, ax = plt.subplots(figsize=(10, 6), dpi=150)
 
         color = "#2E86AB"
-        ax.plot(xs, ys, color=color, linewidth=2.5, label="SAC", zorder=3)
+        ax.plot(xs, ys, color=color, linewidth=2.5, label="Online IL", zorder=3)
         ax.fill_between(xs, ys - stds, ys + stds, color=color, alpha=0.2, zorder=2)
 
         ax.set_xlabel("Environment Steps", fontsize=12, fontweight="medium")

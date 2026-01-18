@@ -1,4 +1,11 @@
-"""Expert data collection entry point."""
+"""Expert data collection entry point.
+
+Usage:
+    python -m collect_expert model_path=path/to/model.zip n_episodes=100
+
+Or with the shell script:
+    ./scripts/collect.sh model_path=path/to/model.zip n_episodes=100
+"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -7,7 +14,7 @@ import hydra
 from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig, OmegaConf
 
-from easyil.expert import ExpertCollector, load_model_for_collection
+from collect_expert import ExpertCollector, load_model_for_collection
 
 
 @hydra.main(config_path="conf", config_name="collect", version_base="1.3")

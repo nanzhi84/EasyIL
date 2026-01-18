@@ -32,7 +32,6 @@ dev = [
 
 [project.scripts]
 easyil-train = "easyil.train:main"
-easyil-collect = "easyil.collect:main"
 easyil-eval = "easyil.eval:main"
 
 [tool.setuptools.packages.find]
