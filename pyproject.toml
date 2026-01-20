@@ -18,8 +18,6 @@ dependencies = [
   "gymnasium[mujoco]>=0.29.0",
   "stable-baselines3>=2.3.0",
   "matplotlib>=3.8.0",
-  "jax[cuda12]",
-  "sbx-rl>=0.25.0",
   "tensorboard>=2.20.0",
 ]
 
@@ -31,7 +29,6 @@ dev = [
 
 [project.scripts]
 easyil-train = "easyil.train:main"
-easyil-collect = "easyil.collect:main"
 easyil-eval = "easyil.eval:main"
 
 [tool.setuptools.packages.find]

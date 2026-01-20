@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from easyil.datasets.expert import load_expert_npz
-from easyil.datasets.chunked import ChunkedExpertDataset
+from easyil.datasets.dataset import ChunkedDataset, load_npz
 
-__all__ = ["load_expert_npz", "ChunkedExpertDataset"]
+__all__ = ["ChunkedDataset", "load_npz"]

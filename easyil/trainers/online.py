@@ -1,4 +1,4 @@
-"""Online trainer for RL-based algorithms (expert training, online IL, etc.)."""
+"""Online trainer for imitation learning algorithms."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -6,31 +6,14 @@ from typing import Any
 
 from omegaconf import DictConfig
 
-from easyil.algos import ALGO_REGISTRY, build_algo
+from easyil.algos import build_algo
 from easyil.callbacks import OnlineTrainCallback
 from easyil.envs import make_env, save_vecnormalize
-from easyil.expert.rl import EXPERT_RL_REGISTRY, build_expert_algo
 from easyil.loggers import build_logger
 
 
-def _build_online_algo(cfg: DictConfig, env: Any, output_dir: str) -> Any:
-    """Build algorithm for online training.
-
-    Checks IL algorithms first, then falls back to expert RL algorithms.
-    """
-    algo_name = str(cfg.name)
-
-    if algo_name in ALGO_REGISTRY:
-        return build_algo(cfg, env, output_dir)
-
-    if algo_name in EXPERT_RL_REGISTRY:
-        return build_expert_algo(cfg, env, output_dir)
-
-    raise KeyError(f"Unknown algo '{algo_name}'")
-
-
 class OnlineTrainer:
-    """Trainer for online algorithms (expert RL training, online IL, etc.)."""
+    """Trainer for online imitation learning algorithms."""
 
     def __init__(self, cfg: DictConfig, output_dir: Path):
         self.cfg = cfg
@@ -53,7 +36,7 @@ class OnlineTrainer:
             training=False,
             monitor_subdir="eval",
         )
-        self.model = _build_online_algo(cfg.algo, self.train_env, str(output_dir))
+        self.model = build_algo(cfg.algo, self.train_env, str(output_dir))
 
     def train(self) -> None:
         callback = OnlineTrainCallback(

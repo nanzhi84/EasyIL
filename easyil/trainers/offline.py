@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 from easyil.algos import build_algo
 from easyil.callbacks import OfflineTrainCallback
-from easyil.datasets import ChunkedExpertDataset, load_expert_npz
+from easyil.datasets import ChunkedDataset, load_npz
 from easyil.envs import make_env, save_vecnormalize
 from easyil.loggers import build_logger
 from easyil.utils.cfg import pick_device
@@ -57,10 +57,10 @@ class OfflineTrainer:
     def _build_dataloader(self) -> tuple[DataLoader, Dict[str, np.ndarray] | None]:
         dataset_cfg = self.cfg.train.dataset
         num_trajs = dataset_cfg.get("num_trajs", None)
-        data = load_expert_npz(dataset_cfg.path, num_trajs=num_trajs)
+        data = load_npz(dataset_cfg.path, num_trajs=num_trajs)
 
         obs_normalize = dataset_cfg.get("obs_normalize", False)
-        ds = ChunkedExpertDataset(
+        ds = ChunkedDataset(
             data=data,
             obs_horizon=self.cfg.algo.obs_horizon,
             action_horizon=self.cfg.algo.action_horizon,

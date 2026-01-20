@@ -9,7 +9,6 @@ Supports:
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any, Callable, Tuple
 
@@ -18,8 +17,6 @@ import numpy as np
 from omegaconf import DictConfig
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecEnvWrapper, VecNormalize
-
-os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
 
 DEFAULT_ACTION_CLIP = 1.0
 
@@ -101,9 +98,9 @@ def _load_reward_fn(
     if model_path is None:
         return ENV_REWS
 
-    from easyil.reward import load_jax_reward_fn
+    from easyil.reward import load_reward_fn
 
-    return load_jax_reward_fn(
+    return load_reward_fn(
         str(model_path),
         obs_dim,
         action_dim,
