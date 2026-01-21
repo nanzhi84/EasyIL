@@ -87,7 +87,8 @@ class GaussianActor(nn.Module):
 
         # Log prob with tanh correction
         log_prob = dist.log_prob(x).sum(dim=-1)
-        log_prob -= (2 * (torch.log(torch.tensor(2.0)) - x - torch.nn.functional.softplus(-2 * x))).sum(dim=-1)
+        log_two = torch.log(torch.tensor(2.0, device=x.device, dtype=x.dtype))
+        log_prob -= (2 * (log_two - x - torch.nn.functional.softplus(-2 * x))).sum(dim=-1)
 
         return action, log_prob
 
@@ -107,6 +108,7 @@ class GaussianActor(nn.Module):
         x = torch.atanh(action_clipped)
 
         log_prob = dist.log_prob(x).sum(dim=-1)
-        log_prob -= (2 * (torch.log(torch.tensor(2.0)) - x - torch.nn.functional.softplus(-2 * x))).sum(dim=-1)
+        log_two = torch.log(torch.tensor(2.0, device=x.device, dtype=x.dtype))
+        log_prob -= (2 * (log_two - x - torch.nn.functional.softplus(-2 * x))).sum(dim=-1)
 
         return log_prob

@@ -143,7 +143,11 @@ class UnifiedBuffer:
                 pad = np.tile(obs_hist[0:1], (obs_horizon - len(obs_hist), 1))
                 obs_hist = np.concatenate([pad, obs_hist], axis=0)
             obs_chunks.append(obs_hist)
-            act_chunks.append(actions[i : i + action_horizon])
+            act_chunk = actions[i : i + action_horizon]
+            if len(act_chunk) < action_horizon:
+                pad = np.tile(act_chunk[-1:], (action_horizon - len(act_chunk), 1))
+                act_chunk = np.concatenate([act_chunk, pad], axis=0)
+            act_chunks.append(act_chunk)
 
         return {
             "obs": torch.from_numpy(np.stack(obs_chunks)).float().to(device),
