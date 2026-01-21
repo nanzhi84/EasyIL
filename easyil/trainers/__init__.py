@@ -1,3 +1,4 @@
+"""Trainers for different learning paradigms."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -18,14 +19,15 @@ class Trainer(Protocol):
 
 
 def build_trainer(cfg: DictConfig, output_dir: Path) -> Trainer:
-    """Build a trainer based on the training mode in config.
+    """
+    Build a trainer based on the training mode in config.
 
     Args:
         cfg: Full configuration with algo, env, train, etc.
         output_dir: Output directory for logs and checkpoints.
 
     Returns:
-        Trainer instance (OfflineTrainer or OnlineTrainer).
+        Trainer instance.
 
     Raises:
         ValueError: If train.mode is not recognized.

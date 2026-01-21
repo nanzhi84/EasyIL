@@ -1,21 +1,20 @@
 seed: 42
 
 algo:
-  name: mlp_bc
+  name: bc
   obs_horizon: 1
   action_horizon: 1
-  exec_horizon: 1
   ema_decay: 0.999
   obs_noise: 0.01
+  learning_rate: 3e-4
+  weight_decay: 0.0
+  grad_clip: 1.0
 
-  model:
+  actor:
     hidden: 512
     depth: 4
     dropout: 0.0
-
-  policy:
     action_clip: 1.0
-    use_amp: true
 
 train:
   mode: offline
@@ -25,16 +24,13 @@ train:
     obs_normalize: true
     num_trajs: 1
 
+  sampler:
+    type: chunk
+    obs_horizon: ${algo.obs_horizon}
+    action_horizon: ${algo.action_horizon}
+
   total_updates: 50000
   batch_size: 32
-  learning_rate: 3e-4
-  weight_decay: 0.0
-
-  num_workers: 16
-  pin_memory: true
-  use_amp: true
-  use_compile: true
-  grad_clip_norm: 1.0
 
   log_freq: 1000
   eval_freq: 5000
@@ -43,31 +39,15 @@ train:
 
   save_best: true
   checkpoint_freq: 10000
-
-  plot_enabled: true
-  plot_every_eval: true
   progress_bar: true
   device: auto
 
 env:
   id: HalfCheetah-v5
-  num_envs: 64
-  eval_num_envs: 64
   kwargs: {}
-
-  normalize:
-    enabled: false
-    norm_obs: true
-    norm_reward: false
-    clip_obs: 10.0
-    clip_reward: 10.0
 
   reward:
     model_path: null
-    hidden_dim: 256
-    scale: 1.0
-
-  compare_reward: null
 
 logger:
   enabled: false
