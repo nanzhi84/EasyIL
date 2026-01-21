@@ -98,7 +98,7 @@ class GAIL:
         if isinstance(source, torch.Tensor):
             source = source.cpu().numpy()
 
-        expert_mask = source == "expert"
+        expert_mask = torch.as_tensor(source == "expert", device=self.device)
         policy_mask = ~expert_mask
 
         if not expert_mask.any() or not policy_mask.any():
