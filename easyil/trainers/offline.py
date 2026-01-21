@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 
 class OfflineTrainer:
-    """Trainer for offline learning algorithms (Diffusion BC, MLP BC, etc.)."""
+    """Trainer for offline learning algorithms (MLP BC, etc.)."""
 
     def __init__(self, cfg: DictConfig, output_dir: Path):
         self.cfg = cfg

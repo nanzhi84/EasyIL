@@ -30,7 +30,6 @@ def build_algo(cfg: DictConfig, eval_env: Any, output_dir: str) -> Any:
 
 
 # Import algorithm modules to trigger registration
-from easyil.algos.diffusion_bc import diffusion_bc  # noqa: F401, E402
 from easyil.algos.mlp_bc import mlp_bc  # noqa: F401, E402
 
 __all__ = [
@@ -39,6 +38,5 @@ __all__ = [
     "register_algo",
     "BasePolicy",
     "BCModule",
-    "diffusion_bc",
     "mlp_bc",
 ]

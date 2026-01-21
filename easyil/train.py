@@ -22,7 +22,7 @@ def _seed_everything(seed: int) -> None:
     torch.cuda.manual_seed_all(seed)
 
 
-@hydra.main(config_path="conf", config_name="diffusion_bc", version_base="1.3")
+@hydra.main(config_path="conf", config_name="mlp_bc", version_base="1.3")
 def main(cfg: DictConfig) -> None:
     output_dir = Path(HydraConfig.get().runtime.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
